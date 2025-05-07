@@ -1,7 +1,6 @@
-#include <Arduino.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <Arduino.h>
 #include <Wire.h>
-
 
 #define SDA_PIN 17
 #define SCL_PIN 16
@@ -9,7 +8,7 @@
 #define SERVOMIN 102
 #define SERVOMAX 510
 #define SERVO_FREQ 50
-#define NUM_JOINTS 4
+#define NUM_JOINTS 6
 const int PPM_PIN = 2;
 const int SYNC_GAP = 3000;
 const int MIN_PULSE_WIDTH = 900;
@@ -24,19 +23,25 @@ volatile unsigned long lastTime = 0;
 volatile int currentChannel = 0;
 volatile unsigned long channelValues[NUM_CHANNELS];
 
-#define motorL1A 21
-#define motorL1B 47
-#define motorL2A 19
-#define motorL2B 20
-#define motorR1A 0
-#define motorR1B 35
-#define motorR2A 48
-#define motorR2B 45
+const int motorL1A = 21;
+const int motorL1B = 47;
+const int motorL2A = 19;
+const int motorL2B = 20;
+const int motorR1A = 0;
+const int motorR1B = 35;
+const int motorR2A = 48;
+const int motorR2B = 45;
+
+const int channelLA = 0;
+const int channelLB = 1;
+const int channelRA = 2;
+const int channelRB = 3;
+
+const int pwmFreq = 5000;
+const int pwmResolution = 8;
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PWM_I2C_ADDR);
-
-int AngleNow[4];
-int AngleInitial[4];
+int AngleNow[5] = {-120,-6,0,60,0};
 
 int angleToPulse(int ang) {
   ang = constrain(ang, -135, 135);
@@ -52,8 +57,7 @@ void moveJoint(int jointNum, int angle) {
   delay(20);
   AngleNow[jointNum] = angle;
 }
-void moveSelectedJointsSmooth(int joints[], int targetAngles[], int jointCount,
-                              int stepDelay = 5) {
+void moveSelectedJointsSmooth(int joints[], int targetAngles[], int jointCount, int stepDelay = 5) {
   bool moving = true;
   while (moving) {
     moving = false;
@@ -69,10 +73,29 @@ void moveSelectedJointsSmooth(int joints[], int targetAngles[], int jointCount,
     delay(stepDelay);
   }
 }
-void retractArm() {
-  int targetAngles0[4] = {-120, -6, 0, 60};
-  int targetJoints0[4] = {0, 1, 2, 3};
-  moveSelectedJointsSmooth(targetJoints0, targetAngles0, 4);
+
+// 摇杆控制底盘舵机
+//控制1
+// void rotateArm(int ch0) {
+//   int rt = ch0 - 1500;
+//   if (abs(rt) < 100) {
+//     rt = 0;
+//   }
+//   int rotate = map(rt, -500, 500, -30, 30);
+//   moveJoint(4,-rotate);
+// }
+//控制2
+void rotateArm(int ch0) {
+  int rt = ch0 - 1500;
+  if (abs(rt) < 50) {
+    rt = 0;
+  }
+  if (rt > 0){
+    moveJoint(4,AngleNow[4]-1);
+  }
+  else if (rt < 0){
+    moveJoint(4,AngleNow[4]+1);
+  }
 }
 
 void IRAM_ATTR ppmInterruptHandler() {
@@ -82,22 +105,55 @@ void IRAM_ATTR ppmInterruptHandler() {
 
   if (duration > SYNC_GAP) {
     currentChannel = 0;
-  } else if (duration >= MIN_PULSE_WIDTH && duration <= MAX_PULSE_WIDTH &&
-             currentChannel < NUM_CHANNELS) {
+  } else if (duration >= MIN_PULSE_WIDTH && duration <= MAX_PULSE_WIDTH && currentChannel < NUM_CHANNELS) {
     channelValues[currentChannel] = duration;
     currentChannel++;
   }
 }
 
 void stop() {
-  analogWrite(motorL1A, 0);
-  analogWrite(motorL1B, 0);
-  analogWrite(motorR1A, 0);
-  analogWrite(motorR1B, 0);
-  analogWrite(motorL2A, 0);
-  analogWrite(motorL2B, 0);
-  analogWrite(motorR2A, 0);
-  analogWrite(motorR2B, 0);
+  ledcWrite(channelLA, 0);
+  ledcWrite(channelLB, 0);
+  ledcWrite(channelRA, 0);
+  ledcWrite(channelRB, 0);
+}
+void move(int ch1, int ch3){
+  int adv = ch1 - CENTER;
+  int turn = ch3 - CENTER;
+  if (abs(adv) < DEADZONE)
+    adv = 0;
+  if (abs(turn) < DEADZONE)
+    turn = 0;
+  int maxRange = 500;
+  int advSpeed = map(adv, -maxRange, maxRange, -230, 230);
+  int turnSpeed = map(turn, -maxRange, maxRange, -230, 230);
+
+  if (abs(advSpeed) > abs(turnSpeed)) {
+
+    if (adv >= 0) {
+      ledcWrite(channelLA, 0);
+      ledcWrite(channelLB, advSpeed/3);
+      ledcWrite(channelRA, advSpeed/3);
+      ledcWrite(channelRB, 0);
+    } else {
+      ledcWrite(channelLA, -advSpeed/3);
+      ledcWrite(channelLB, 0);
+      ledcWrite(channelRA, 0);
+      ledcWrite(channelRB, -advSpeed/3);
+    }
+  } else {
+    if (turnSpeed >= 0) {
+      ledcWrite(channelLA, 0);
+      ledcWrite(channelLB, turnSpeed/5);
+      ledcWrite(channelRA, 0);
+      ledcWrite(channelRB, turnSpeed/5);
+    } else {
+      ledcWrite(channelLA, -turnSpeed/5);
+      ledcWrite(channelLB, 0);
+      ledcWrite(channelRA, -turnSpeed/5);
+      ledcWrite(channelRB, 0);
+    }
+  }
 }
 
 void setup() {
@@ -107,56 +163,63 @@ void setup() {
   pwm.begin();
   pwm.setOscillatorFrequency(27000000);
   pwm.setPWMFreq(SERVO_FREQ);
-  pwm.setPWM(0, 0, angleToPulse(40));
+  pwm.setPWM(0, 0, angleToPulse(-120));
   pwm.setPWM(1, 0, angleToPulse(-6));
-  pwm.setPWM(2, 0, angleToPulse(-35));
-  pwm.setPWM(3, 0, angleToPulse(120));
-  AngleNow[0] = 40;
-  AngleNow[1] = -6;
-  AngleNow[2] = -35;
-  AngleNow[3] = 120;
+  pwm.setPWM(2, 0, angleToPulse(0));
+  pwm.setPWM(3, 0, angleToPulse(65));
+  pwm.setPWM(4, 0, angleToPulse(0));
+  pwm.setPWM(5, 0, angleToPulse(17));
 
   pinMode(PPM_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PPM_PIN), ppmInterruptHandler, FALLING);
-  pinMode(motorL1A, OUTPUT);
-  pinMode(motorL1B, OUTPUT);
-  pinMode(motorR1A, OUTPUT);
-  pinMode(motorR1B, OUTPUT);
-  pinMode(motorL2A, OUTPUT);
-  pinMode(motorL2B, OUTPUT);
-  pinMode(motorR2A, OUTPUT);
-  pinMode(motorR2B, OUTPUT);
   channelValues[5] = 0;
   channelValues[4] = 0;
   channelValues[6] = 0;
+
+  ledcSetup(channelLA, pwmFreq, pwmResolution);
+  ledcSetup(channelLB, pwmFreq, pwmResolution);
+  ledcSetup(channelRA, pwmFreq, pwmResolution);
+  ledcSetup(channelRB, pwmFreq, pwmResolution);
+
+  ledcAttachPin(motorL1A, channelLA);
+  ledcAttachPin(motorL2A, channelLA);
+  ledcAttachPin(motorL1B, channelLB);
+  ledcAttachPin(motorL2B, channelLB);
+  ledcAttachPin(motorR1A, channelRA);
+  ledcAttachPin(motorR2A, channelRA);
+  ledcAttachPin(motorR1B, channelRB);
+  ledcAttachPin(motorR2B, channelRB);
 }
 
 void DownArm() {
-  int targetAngles1[3] = {40, -6, -35};
-  int targetJoints1[3] = {0, 1, 2};
-  moveSelectedJointsSmooth(targetJoints1, targetAngles1, 3);
-  moveJoint(3, 120);
+  int targetAngles1[4] = {40, -6, -35, 120};
+  int targetJoints1[4] = {0, 1, 2, 3};
+  moveSelectedJointsSmooth(targetJoints1, targetAngles1, 4);
 }
-void Grab() { moveJoint(3, 65); }
-void UpArm() {
+void Down2() {
+  int targetAngles3[4] = {-5, -6, 80, 120};
+  int targetJoints3[4] = {0, 1, 2, 3};
+  moveSelectedJointsSmooth(targetJoints3, targetAngles3, 4);
+}
+void Put() {
   int targetAngles2[3] = {-90, -6, 35};
   int targetJoints2[3] = {0, 1, 2};
   moveSelectedJointsSmooth(targetJoints2, targetAngles2, 3);
+  delay(100);
+  moveJoint(3, 120);
 }
-void Put() { moveJoint(3, 120); }
-
-void Down2() {
-  int targetAngles3[3] = {-5, -6, 80};
-  int targetJoints3[3] = {0, 1, 2};
-  moveSelectedJointsSmooth(targetJoints3, targetAngles3, 3);
-  Put();
+void retractArm() {
+  moveJoint(3,65);
+  delay(100);
+  int targetAngles0[4] = {-120, -6, 0,0};
+  int targetJoints0[4] = {0, 1, 2,4};
+  moveSelectedJointsSmooth(targetJoints0, targetAngles0, 4);
 }
 
-int current = 0;
-int flag = 0;
+int ch5 = 1000;
+int ch4 = 1000;
+int ch6 = 1000;
 
-int current2 = 0;
-int flag2 = 0;
 void loop() {
   Serial.print("Channel2: ");
   Serial.print(channelValues[1]);
@@ -174,155 +237,38 @@ void loop() {
     stop();
     return;
   }
-  if (flag == 2 && (int)channelValues[5] <= 1100 &&
-      (int)channelValues[5] >= 900) {
-    current = 0;
-    flag = 0;
+
+  // 机械臂控制(ch4是拿取倒下的物品、ch6是放物品、ch5是拿正常站立的物品)
+  //正常拿取
+  // if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1600 && (int)channelValues[5] >= 1400) {
+  if ((int)channelValues[5] <= 1600 && (int)channelValues[5] >= 1400){
     DownArm();
   }
-  if (current == 0 && (int)channelValues[5] >= 1400 &&
-      (int)channelValues[5] <= 1600) {
-    Grab();
+  if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1100 && (int)channelValues[5] >= 900) {
+  // if ((int)channelValues[5] <= 1100 && (int)channelValues[5] >= 900){
     retractArm();
-    flag = 1;
-    current = 1;
   }
-  if (flag == 1 && (int)channelValues[5] >= 1900) {
-    UpArm();
-    delay(100);
-    Put();
-    flag = 2;
-  }
-
-  // 机械臂补救方案(欸嘿）
-  if ((int)channelValues[4] >= 1800 && current2 == 0) {
+  // 拿取倒下的物品
+  if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] >= 1800) {
+  // if ((int)channelValues[4] >= 1800) {
     Down2();
-    current2 = 1;
   }
-  if ((int)channelValues[6] >= 1800 && flag2 == 0) {
-    Grab();
-    delay(200);
+  if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] <= 1200) {
+  // if ((int)channelValues[4] <= 1200) {
     retractArm();
-    flag2 = 1;
   }
-  if ((int)channelValues[4] <= 1200 && (int)channelValues[6] >= 1800 &&
-      current2 == 1) {
-    UpArm();
-    delay(200);
+  //放物品
+  if (abs(ch6 - (int)channelValues[6]) >=400 && (int)channelValues[6] >= 1800){
+  // if ((int)channelValues[6] >= 1800) {
     Put();
-    current2 = 0;
   }
-  if ((int)channelValues[4] <= 1200 && (int)channelValues[6] <= 1200 &&
-      flag2 == 1) {
-    DownArm();
-    flag2 = 0;
-  }
-  // int adv = (int)channelValues[1] - CENTER;
-  // int turn = (int)channelValues[3] - CENTER;
 
-  // if (abs(adv) < DEADZONE) adv = 0;
-  // if (abs(turn) < DEADZONE) turn = 0;
+  //底盘旋转
+  rotateArm((int)channelValues[0]);
 
-  // int maxRange = MAX_PULSE_WIDTH - CENTER;
-  // int advSpeed = map(adv, -maxRange, maxRange, -255, 255);
-  // int turnSpeed = map(turn, -maxRange, maxRange, -255, 255);
-
-  // if (abs(advSpeed) > abs(turnSpeed)){
-  //    if (advSpeed >= 0){
-  //      analogWrite(motorR1A, advSpeed);
-  //      analogWrite(motorR2A, advSpeed);
-  //      analogWrite(motorR1B, 0);
-  //      analogWrite(motorR2B, 0);
-  //      analogWrite(motorL1A, 0);
-  //      analogWrite(motorL2A, 0);
-  //      analogWrite(motorL1B, advSpeed);
-  //      analogWrite(motorL2B, advSpeed);
-  //    }
-  //    else{
-  //      analogWrite(motorR1A, 0);
-  //      analogWrite(motorR2A, 0);
-  //      analogWrite(motorR1B, -advSpeed);
-  //      analogWrite(motorR2B, -advSpeed);
-  //      analogWrite(motorL1A, -advSpeed);
-  //      analogWrite(motorL2A, -advSpeed);
-  //      analogWrite(motorL1B, 0);
-  //      analogWrite(motorL2B, 0);
-  //    }
-  //  }
-  //  else {
-  //    if(turnSpeed >= 0){
-  //      analogWrite(motorR1A, 0);
-  //      analogWrite(motorR2A, 0);
-  //      analogWrite(motorR1B, turnSpeed);
-  //      analogWrite(motorR2B, turnSpeed);
-  //      analogWrite(motorL1A, 0);
-  //      analogWrite(motorL2A, 0);
-  //      analogWrite(motorL1B, turnSpeed);
-  //      analogWrite(motorL2B, turnSpeed);
-  //    }
-  //    else{
-  //      analogWrite(motorR1A, -turnSpeed);
-  //      analogWrite(motorR2A, -turnSpeed);
-  //      analogWrite(motorR1B, 0);
-  //      analogWrite(motorR2B, 0);
-  //      analogWrite(motorL1A, -turnSpeed);
-  //      analogWrite(motorL2A, -turnSpeed);
-  //      analogWrite(motorL1B, 0);
-  //      analogWrite(motorL2B, 0);
-  //    }
-  //  }
-
-  int adv = (int)channelValues[1] - CENTER;
-  int turn = (int)channelValues[3] - CENTER;
-
-  if (abs(adv) < DEADZONE)
-    adv = 0;
-  if (abs(turn) < DEADZONE)
-    turn = 0;
-
-  int maxRange = 500;
-  int advSpeed = map(adv, -maxRange, maxRange, -230, 230);
-  int turnSpeed = map(turn, -maxRange, maxRange, -230, 230);
-
-  if (abs(advSpeed) > abs(turnSpeed)) {
-    if (adv >= 0) {
-      analogWrite(motorR1A, advSpeed);
-      analogWrite(motorR2A, advSpeed);
-      analogWrite(motorR1B, 0);
-      analogWrite(motorR2B, 0);
-      analogWrite(motorL1A, 0);
-      analogWrite(motorL2A, 0);
-      analogWrite(motorL1B, advSpeed);
-      analogWrite(motorL2B, advSpeed);
-    } else {
-      analogWrite(motorR1A, 0);
-      analogWrite(motorR2A, 0);
-      analogWrite(motorR1B, -advSpeed);
-      analogWrite(motorR2B, -advSpeed);
-      analogWrite(motorL1A, -advSpeed);
-      analogWrite(motorL2A, -advSpeed);
-      analogWrite(motorL1B, 0);
-      analogWrite(motorL2B, 0);
-    }
-  } else {
-    if (turnSpeed >= 0) {
-      analogWrite(motorR1A, 0);
-      analogWrite(motorR2A, 0);
-      analogWrite(motorR1B, turnSpeed);
-      analogWrite(motorR2B, turnSpeed);
-      analogWrite(motorL1A, 0);
-      analogWrite(motorL2A, 0);
-      analogWrite(motorL1B, turnSpeed);
-      analogWrite(motorL2B, turnSpeed);
-    } else {
-      analogWrite(motorR1A, -turnSpeed);
-      analogWrite(motorR2A, -turnSpeed);
-      analogWrite(motorR1B, 0);
-      analogWrite(motorR2B, 0);
-      analogWrite(motorL1A, -turnSpeed);
-      analogWrite(motorL2A, -turnSpeed);
-      analogWrite(motorL1B, 0);
-      analogWrite(motorL2B, 0);
-    }
-  }
+  move((int)channelValues[1], (int)channelValues[3]);
+  
+  ch5 = channelValues[5];
+  ch4 = channelValues[4];
+  ch6 = channelValues[6];
 }

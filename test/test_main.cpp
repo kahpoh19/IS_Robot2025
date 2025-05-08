@@ -92,6 +92,7 @@ void rotateArm(int ch0) {
   }
   pwm.setPWM(4, 0, rotate);
 }
+
 void IRAM_ATTR ppmInterruptHandler() {
   unsigned long currentTime = micros();
   unsigned long duration = currentTime - lastTime;
@@ -107,14 +108,6 @@ void IRAM_ATTR ppmInterruptHandler() {
 }
 
 void stop() {
-  // analogWrite(motorL1A, 0);
-  // analogWrite(motorL1B, 0);
-  // analogWrite(motorR1A, 0);
-  // analogWrite(motorR1B, 0);
-  // analogWrite(motorL2A, 0);
-  // analogWrite(motorL2B, 0);
-  // analogWrite(motorR2A, 0);
-  // analogWrite(motorR2B, 0);
   ledcWrite(channelLA, 0);
   ledcWrite(channelLB, 0);
   ledcWrite(channelRA, 0);
@@ -139,14 +132,6 @@ void setup() {
 
   pinMode(PPM_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PPM_PIN), ppmInterruptHandler, FALLING);
-  // pinMode(motorL1A, OUTPUT);
-  // pinMode(motorL1B, OUTPUT);
-  // pinMode(motorR1A, OUTPUT);
-  // pinMode(motorR1B, OUTPUT);
-  // pinMode(motorL2A, OUTPUT);
-  // pinMode(motorL2B, OUTPUT);
-  // pinMode(motorR2A, OUTPUT);
-  // pinMode(motorR2B, OUTPUT);
   channelValues[5] = 0;
   channelValues[4] = 0;
   channelValues[6] = 0;
@@ -198,6 +183,7 @@ void loop() {
   Serial.print(channelValues[1]);
   Serial.print(" Channel4: ");
   Serial.println(channelValues[3]);
+  
   // 如果没有收到遥控信号，则停止并跳过电机控制
   bool noSignal = true;
   for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -210,6 +196,7 @@ void loop() {
     stop();
     return;
   }
+
   if (flag == 2 && (int)channelValues[5] <= 1100 &&
       (int)channelValues[5] >= 900) {
     current = 0;

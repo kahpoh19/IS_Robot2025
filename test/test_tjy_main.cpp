@@ -87,14 +87,14 @@ void moveSelectedJointsSmooth(int joints[], int targetAngles[], int jointCount, 
 //控制2
 void rotateArm(int ch0) {
   int rt = ch0 - 1500;
-  if (abs(rt) < 50) {
+  if (abs(rt) < 100) {
     rt = 0;
   }
   if (rt > 0){
-    moveJoint(4,AngleNow[4]-1);
+    moveJoint(4,AngleNow[4]+2);
   }
   else if (rt < 0){
-    moveJoint(4,AngleNow[4]+1);
+    moveJoint(4,AngleNow[4]-2);
   }
 }
 
@@ -129,8 +129,6 @@ void move(int ch1, int ch3){
   int turnSpeed = map(turn, -maxRange, maxRange, -230, 230);
 
   if (abs(advSpeed) > abs(turnSpeed)) {
-    advSpeed /= 3;
-    turnSpeed /= 5;
     if (adv >= 0) {
       ledcWrite(channelLA, 0);
       ledcWrite(channelLB, advSpeed);
@@ -202,11 +200,11 @@ void Down2() {
   moveSelectedJointsSmooth(targetJoints3, targetAngles3, 4);
 }
 void Put() {
+  moveJoint(3, 120);
+  delay(100);
   int targetAngles2[3] = {-90, -6, 35};
   int targetJoints2[3] = {0, 1, 2};
   moveSelectedJointsSmooth(targetJoints2, targetAngles2, 3);
-  delay(100);
-  moveJoint(3, 120);
 }
 void retractArm() {
   moveJoint(3,65);
@@ -225,7 +223,6 @@ void loop() {
   Serial.print(channelValues[1]);
   Serial.print(" Channel4: ");
   Serial.println(channelValues[3]);
-  
   // 如果没有收到遥控信号，则停止并跳过电机控制
   bool noSignal = true;
   for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -239,42 +236,31 @@ void loop() {
     return;
   }
 
-<<<<<<< HEAD
-  if (flag == 2 && (int)channelValues[5] <= 1100 &&
-      (int)channelValues[5] >= 900) {
-    current = 0;
-    flag = 0;
-=======
   // 机械臂控制(ch4是拿取倒下的物品、ch6是放物品、ch5是拿正常站立的物品)
   //正常拿取
-  // if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1600 && (int)channelValues[5] >= 1400) {
-  if ((int)channelValues[5] <= 1600 && (int)channelValues[5] >= 1400){
->>>>>>> ad3b7317fd30b61547ce829897bade1b6f673e26
+  if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1600 && (int)channelValues[5] >= 1400) {
     DownArm();
   }
-  // if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1100 && (int)channelValues[5] >= 900) {
-  if ((int)channelValues[5] <= 1100 && (int)channelValues[5] >= 900){
+  if (abs(ch5 - (int)channelValues[5]) >=300 && (int)channelValues[5] <= 1100 && (int)channelValues[5] >= 900) {
     retractArm();
   }
   // 拿取倒下的物品
-  // if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] >= 1800) {
-  if ((int)channelValues[4] >= 1800) {
+  if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] >= 1800) {
     Down2();
   }
-  // if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] <= 1200) {
-  if ((int)channelValues[4] <= 1200) {
+  if (abs(ch4 - (int)channelValues[4]) >=400 && (int)channelValues[4] <= 1200) {
     retractArm();
   }
   //放物品
-  if ((int)channelValues[6] >= 1800) {
+  if (abs(ch6 - (int)channelValues[6]) >=400) {
     Put();
   }
-
   //底盘旋转
   rotateArm((int)channelValues[0]);
 
   move((int)channelValues[1], (int)channelValues[3]);
-  // ch5 = channelValues[5];
-  // ch4 = channelValues[4];
-  // ch6 = channelValues[6];
+  
+  ch5 = channelValues[5];
+  ch4 = channelValues[4];
+  ch6 = channelValues[6];
 }

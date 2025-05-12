@@ -41,7 +41,7 @@ const int pwmFreq = 5000;
 const int pwmResolution = 8;
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PWM_I2C_ADDR);
-int AngleNow[5] = {-120,-6,0,60,0};
+int AngleNow[5] = {-120,-6,0,23,0};
 
 int angleToPulse(int ang) {
   ang = constrain(ang, -135, 135);
@@ -191,7 +191,7 @@ void setup() {
   pwm.setPWM(0, 0, angleToPulse(-120));
   pwm.setPWM(1, 0, angleToPulse(-6));
   pwm.setPWM(2, 0, angleToPulse(0));
-  pwm.setPWM(3, 0, angleToPulse(60));
+  pwm.setPWM(3, 0, angleToPulse(23));
   pwm.setPWM(4, 0, angleToPulse(0));
   pwm.setPWM(5, 0, angleToPulse(15));
 
@@ -218,12 +218,12 @@ void setup() {
 }
 
 void DownArm() {
-  int targetAngles1[4] = {38, 0, -32, 120};
+  int targetAngles1[4] = {38, 0, -32, 65};
   int targetJoints1[4] = {0, 1, 2, 3};
   moveSelectedJointsSmooth(targetJoints1, targetAngles1, 4);
 }
 void Down2() {
-  int targetAngles3[4] = {2, -6, 80, 120};
+  int targetAngles3[4] = {2, -6, 80, 65};
   int targetJoints3[4] = {0, 1, 2, 3};
   moveSelectedJointsSmooth(targetJoints3, targetAngles3, 4);
 }
@@ -232,12 +232,12 @@ void Put() {
   int targetJoints2[3] = {0, 1, 2};
   moveSelectedJointsSmooth(targetJoints2, targetAngles2, 3);
   delay(100);
-  moveJoint(3, 80);
+  moveJoint(3, 45);
   delay(50);
-  moveJoint(3, 110);
+  moveJoint(3, 65);
 }
 void retractArm() {
-  moveJoint(3,60);
+  moveJoint(3,23);
   delay(100);
   int targetAngles0[4] = {-120, -6, 0,0};
   int targetJoints0[4] = {0, 1, 2,4};

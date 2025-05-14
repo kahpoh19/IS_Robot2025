@@ -231,9 +231,9 @@ void Put() {
   int targetAngles2[3] = {-105, -6, 55};
   int targetJoints2[3] = {0, 1, 2};
   moveSelectedJointsSmooth(targetJoints2, targetAngles2, 3);
-  delay(100);
-  moveJoint(3, 45);
-  delay(50);
+  delay(250);
+  // moveJoint(3, 45);
+  // delay(50);
   moveJoint(3, 65);
 }
 void retractArm() {
